@@ -3,6 +3,7 @@ package request
 import (
 	"bytes"
 	"errors"
+	"http/internal/headers"
 	"io"
 	"strings"
 )
@@ -12,11 +13,13 @@ type state int
 const (
 	initalized state = iota
 	done
+	requestStateParsingHeaders
 )
 
 type Request struct {
 	state_val   state
 	RequestLine RequestLine
+	Headers     headers.Headers
 }
 
 type RequestLine struct {
@@ -28,6 +31,23 @@ type RequestLine struct {
 const crlf = "\r\n"
 const buf_size = 8
 
+func (r *Request) innerparse(data []byte) (int, error) {
+	if r.Headers == nil {
+		r.Headers = headers.NewHeaders()
+	}
+	num, stat, err := r.Headers.Parse(data)
+
+	if err != nil {
+		return 0, err
+	}
+	if stat {
+		r.state_val = done
+		return num, nil
+	}
+
+	return num, nil
+}
+
 func (r *Request) parse(data []byte) (int, error) {
 	if r.state_val == initalized {
 		rl, num_bytes, err := ParseRequestLine(data)
@@ -38,11 +58,23 @@ func (r *Request) parse(data []byte) (int, error) {
 			return 0, nil
 		}
 		r.RequestLine = *rl
-		r.state_val = done
+		r.state_val = requestStateParsingHeaders
 		return num_bytes, nil
 	}
-
-	if r.state_val == done {
+	if r.state_val == requestStateParsingHeaders {
+		total_bytes := 0
+		for r.state_val != done {
+			n, err := r.innerparse(data[total_bytes:])
+			if err != nil {
+				return 0, err
+			}
+			if n == 0 {
+				return total_bytes, nil
+			}
+			total_bytes += n
+		}
+		return total_bytes, nil
+	} else if r.state_val == done {
 		return 0, errors.New("error: trying to read data in a done state")
 	}
 
@@ -59,18 +91,18 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 			copy(newbuf, buf)
 			buf = newbuf
 		}
-		read, err := r.Read(buf[readToIndex:])
+		readed, err := r.Read(buf[readToIndex:])
 		if err == io.EOF {
 			req.state_val = done
 			break
 		}
-		readToIndex += read
-		read, err = req.parse(buf[:readToIndex])
+		readToIndex += readed
+		readed, err = req.parse(buf[:readToIndex])
 		if err != nil {
 			return nil, err
 		}
-		copy(buf, buf[read:readToIndex])
-		readToIndex -= read
+		copy(buf, buf[readed:readToIndex])
+		readToIndex -= readed
 	}
 	return &req, nil
 }
