@@ -84,5 +84,5 @@ func TestHeadersParse(t *testing.T) {
 	assert.False(t, done)
 	data = []byte("User-Agent: 6921!\r\n\r\n")
 	n, done, err = headers.Parse(data)
-	assert.Equal(t, "curl/7.81.0,6921!", headers["user-agent"])
+	assert.Equal(t, "curl/7.81.0, 6921!", headers["user-agent"])
 }

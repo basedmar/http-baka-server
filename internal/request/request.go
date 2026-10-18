@@ -5,6 +5,7 @@ import (
 	"errors"
 	"http/internal/headers"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -14,12 +15,14 @@ const (
 	initalized state = iota
 	done
 	requestStateParsingHeaders
+	parsingbody
 )
 
 type Request struct {
 	state_val   state
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 }
 
 type RequestLine struct {
@@ -49,6 +52,21 @@ func (r *Request) innerparse(data []byte) (int, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
+	total_bytes_parsed := 0
+	for r.state_val != done {
+		n, err := r.ParseSingle(data[total_bytes_parsed:])
+		if err != nil {
+			return 0, err
+		}
+		total_bytes_parsed += n
+		if n == 0 {
+			break
+		}
+	}
+	return total_bytes_parsed, nil
+}
+
+func (r *Request) ParseSingle(data []byte) (int, error) {
 	if r.state_val == initalized {
 		rl, num_bytes, err := ParseRequestLine(data)
 		if err != nil {
@@ -73,18 +91,38 @@ func (r *Request) parse(data []byte) (int, error) {
 			}
 			total_bytes += n
 		}
+		r.state_val = parsingbody
 		return total_bytes, nil
-	} else if r.state_val == done {
+	}
+	if r.state_val == parsingbody {
+		if _, ok := r.Headers["content-length"]; !ok {
+			r.state_val = done
+			return 0, nil
+		}
+		r.Body = append(r.Body, data...)
+		i, err := strconv.Atoi(r.Headers["content-length"])
+		if err != nil {
+			return 0, err
+		}
+		if len(r.Body) > i {
+			return 0, errors.New("body value is actually greater than listed content length in headers")
+		} else if len(r.Body) == i {
+			r.state_val = done
+		}
+		return len(data), nil
+
+	}
+	if r.state_val == done {
 		return 0, errors.New("error: trying to read data in a done state")
 	}
-
 	return 0, errors.New("error: unknown state baka")
 }
 
 func RequestFromReader(r io.Reader) (*Request, error) {
 	buf := make([]byte, buf_size)
 	readToIndex := 0
-	req := Request{state_val: initalized}
+	req := Request{state_val: initalized, Headers: headers.NewHeaders(), Body: make([]byte, 0)}
+
 	for req.state_val != done {
 		if readToIndex == len(buf) {
 			newbuf := make([]byte, len(buf)*2)
@@ -93,7 +131,9 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 		}
 		readed, err := r.Read(buf[readToIndex:])
 		if err == io.EOF {
-			req.state_val = done
+			if req.state_val != done {
+				return nil, errors.New("incomplete request")
+			}
 			break
 		}
 		readToIndex += readed

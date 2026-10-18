@@ -3,7 +3,6 @@ package headers
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -41,10 +40,9 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	}
 	_, ok := h[key]
 	if ok {
-		h[key] += "," + value
+		h[key] += ", " + value
 	} else {
 		h[key] = value
 	}
-	fmt.Println(h)
 	return idx + len(crlf), false, nil
 }
