@@ -130,11 +130,14 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 			buf = newbuf
 		}
 		readed, err := r.Read(buf[readToIndex:])
-		if err == io.EOF {
-			if req.state_val != done {
-				return nil, errors.New("incomplete request")
+		if err != nil {
+			if err == io.EOF {
+				if req.state_val != done {
+					return nil, errors.New("incomplete request")
+				}
+				break
 			}
-			break
+			return nil, err
 		}
 		readToIndex += readed
 		readed, err = req.parse(buf[:readToIndex])
