@@ -67,7 +67,8 @@ func (r *Request) parse(data []byte) (int, error) {
 }
 
 func (r *Request) ParseSingle(data []byte) (int, error) {
-	if r.state_val == initalized {
+	switch r.state_val {
+	case initalized:
 		rl, num_bytes, err := ParseRequestLine(data)
 		if err != nil {
 			return 0, err
@@ -78,26 +79,25 @@ func (r *Request) ParseSingle(data []byte) (int, error) {
 		r.RequestLine = *rl
 		r.state_val = requestStateParsingHeaders
 		return num_bytes, nil
-	}
-	if r.state_val == requestStateParsingHeaders {
-		total_bytes := 0
-		for r.state_val != done {
-			n, err := r.innerparse(data[total_bytes:])
-			if err != nil {
-				return 0, err
-			}
-			if n == 0 {
-				return total_bytes, nil
-			}
-			total_bytes += n
+
+	case requestStateParsingHeaders:
+		if r.Headers == nil {
+			r.Headers = headers.NewHeaders()
 		}
-		r.state_val = parsingbody
-		return total_bytes, nil
-	}
-	if r.state_val == parsingbody {
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return n, err
+		}
+		if done {
+			r.state_val = parsingbody
+			return n, nil
+		}
+		return n, nil
+
+	case parsingbody:
 		if _, ok := r.Headers["content-length"]; !ok {
 			r.state_val = done
-			return 0, nil
+			return len(data), nil
 		}
 		r.Body = append(r.Body, data...)
 		i, err := strconv.Atoi(r.Headers["content-length"])
@@ -110,12 +110,12 @@ func (r *Request) ParseSingle(data []byte) (int, error) {
 			r.state_val = done
 		}
 		return len(data), nil
-
-	}
-	if r.state_val == done {
+	case done:
 		return 0, errors.New("error: trying to read data in a done state")
+
+	default:
+		return 0, errors.New("error: unknown state baka")
 	}
-	return 0, errors.New("error: unknown state baka")
 }
 
 func RequestFromReader(r io.Reader) (*Request, error) {
@@ -124,7 +124,7 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 	req := Request{state_val: initalized, Headers: headers.NewHeaders(), Body: make([]byte, 0)}
 
 	for req.state_val != done {
-		if readToIndex == len(buf) {
+		if readToIndex >= len(buf) {
 			newbuf := make([]byte, len(buf)*2)
 			copy(newbuf, buf)
 			buf = newbuf

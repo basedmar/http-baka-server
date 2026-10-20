@@ -23,6 +23,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if idx == 0 {
 		return 2, true, nil
 	}
+
 	header_str := string(data[:idx])
 	split := strings.SplitN(header_str, ":", 2)
 	if len(split) != 2 {
