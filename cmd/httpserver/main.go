@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"http/internal/request"
 	"http/internal/response"
 	"http/internal/server"
@@ -23,11 +24,20 @@ func yourproblemHandler(w *response.Writer, req *request.Request) {
     <p>Your request honestly kinda sucked.</p>
   </body>
 </html>`
-		w.WriteStatusLinesW(2)
+		err := w.WriteStatusLinesW(2)
+		if err != nil {
+			fmt.Printf("%s", err)
+		}
 		head := response.GetDefaultHeaders(len(body))
 		head["content-type"] = "text/html"
-		w.WriteHeadersW(head)
-		w.WriteBody([]byte(body))
+		err = w.WriteHeadersW(head)
+		if err != nil {
+			fmt.Printf("%s", err)
+		}
+		err = w.WriteBody([]byte(body))
+		if err != nil {
+			fmt.Printf("%s", err)
+		}
 		return
 	}
 	if req.RequestLine.RequestTarget == "/myproblem" {

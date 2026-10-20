@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"http/internal/request"
 	"http/internal/response"
-	"io"
 	"log"
 	"net"
 	"sync/atomic"
@@ -56,23 +55,16 @@ func (s *Server) listen() {
 	}
 }
 
-func HandleErr(w io.Writer, hanerr *HandlerError) {
-	response.WriteStatusLines(w, response.StatusCode(hanerr.Status))
-	response.WriteHeaders(w, response.GetDefaultHeaders(len(hanerr.Msg)))
-	w.Write([]byte(hanerr.Msg))
-}
-
 func (s *Server) Handle(con net.Conn) {
 	defer con.Close()
+	w := response.NewWriter(con)
 	req, err := request.RequestFromReader(con)
 	if err != nil {
-		fmt.Printf("%s", err)
+		w.WriteStatusLinesW(2)
+		body := []byte(fmt.Sprintf("Error parsing req >_< : %s", err))
+		w.WriteHeadersW(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 	}
-	writer := response.Writer{Statusline: []byte{}}
-	s.handle(&writer, req)
-
-	con.Write(writer.Statusline)
-	response.WriteHeaders(con, writer.Headers)
-	con.Write(writer.Body)
+	s.handle(w, req)
 
 }
