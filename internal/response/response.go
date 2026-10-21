@@ -56,9 +56,25 @@ func (w *Writer) WriteBody(p []byte) error {
 }
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
+	if contentLen == -1 {
+		head := headers.NewHeaders()
+		head["connection"] = "close"
+		head["content-type"] = "text/plain"
+		return head
+	}
 	head := headers.NewHeaders()
 	head["content-length"] = fmt.Sprintf("%d", contentLen)
 	head["connection"] = "close"
 	head["content-type"] = "text/plain"
 	return head
+}
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	w.write_stream.Write([]byte(fmt.Sprintf("%x\r\n", len(p))))
+	w.write_stream.Write(p)
+	return w.write_stream.Write([]byte("\r\n"))
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	return w.write_stream.Write([]byte("0\r\n\r\n"))
 }

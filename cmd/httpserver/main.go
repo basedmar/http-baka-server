@@ -5,15 +5,45 @@ import (
 	"http/internal/request"
 	"http/internal/response"
 	"http/internal/server"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
 const port = 42069
 
 func yourproblemHandler(w *response.Writer, req *request.Request) {
+	if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+		prefix := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin/")
+		headers := response.GetDefaultHeaders(-1)
+		headers["transfer-encoding"] = "chunked"
+		resp, err := http.Get(fmt.Sprintf("https://httpbingo.org/%s", prefix))
+		if err != nil {
+			fmt.Printf("BAKA I COULDNT READ ITT!!!!!!:() : %s\n", err)
+			fmt.Printf(prefix)
+			return
+		}
+		w.WriteStatusLinesW(1)
+		w.WriteHeadersW(headers)
+		buf := make([]byte, 1024)
+		for {
+			n, err := resp.Body.Read(buf)
+			if err == io.EOF {
+				w.WriteChunkedBodyDone()
+				break
+			}
+			if err != nil {
+				fmt.Printf("%s", err)
+			}
+			fmt.Printf("%d", n)
+			w.WriteChunkedBody(buf[:n])
+		}
+		return
+	}
 	if req.RequestLine.RequestTarget == "/yourproblem" {
 		body := `<html>
   <head>
