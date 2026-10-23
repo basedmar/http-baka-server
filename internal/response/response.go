@@ -15,11 +15,11 @@ const fourhundred StatusCode = 2
 const fivehundred StatusCode = 3
 
 type Writer struct {
-	write_stream io.Writer
+	Write_stream io.Writer
 }
 
 func NewWriter(con net.Conn) *Writer {
-	return &Writer{write_stream: con}
+	return &Writer{Write_stream: con}
 }
 
 func (w *Writer) WriteStatusLinesW(StatusCode StatusCode) error {
@@ -35,23 +35,23 @@ func (w *Writer) WriteStatusLinesW(StatusCode StatusCode) error {
 	default:
 		return errors.New("not implemented status code")
 	}
-	_, err := w.write_stream.Write(Statusline)
+	_, err := w.Write_stream.Write(Statusline)
 	return err
 }
 
 func (w *Writer) WriteHeadersW(headers headers.Headers) error {
 	for k, v := range headers {
-		_, err := w.write_stream.Write([]byte(fmt.Sprintf("%s: %s\r\n", k, v)))
+		_, err := w.Write_stream.Write([]byte(fmt.Sprintf("%s: %s\r\n", k, v)))
 		if err != nil {
 			return err
 		}
 	}
-	_, err := w.write_stream.Write([]byte("\r\n"))
+	_, err := w.Write_stream.Write([]byte("\r\n"))
 	return err
 }
 
 func (w *Writer) WriteBody(p []byte) error {
-	_, err := w.write_stream.Write(p)
+	_, err := w.Write_stream.Write(p)
 	return err
 }
 
@@ -70,11 +70,22 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 }
 
 func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
-	w.write_stream.Write([]byte(fmt.Sprintf("%x\r\n", len(p))))
-	w.write_stream.Write(p)
-	return w.write_stream.Write([]byte("\r\n"))
+	w.Write_stream.Write([]byte(fmt.Sprintf("%x\r\n", len(p))))
+	w.Write_stream.Write(p)
+	return w.Write_stream.Write([]byte("\r\n"))
 }
 
 func (w *Writer) WriteChunkedBodyDone() (int, error) {
-	return w.write_stream.Write([]byte("0\r\n\r\n"))
+	return w.Write_stream.Write([]byte("0\r\n\r\n"))
+}
+
+func (w *Writer) WriterTrailers(h headers.Headers) error {
+	for k, v := range h {
+		_, err := w.Write_stream.Write([]byte(fmt.Sprintf("%s: %s\r\n", k, v)))
+		if err != nil {
+			return err
+		}
+	}
+	w.Write_stream.Write([]byte("\r\n"))
+	return nil
 }
